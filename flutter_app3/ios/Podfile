@@ -1,7 +1,7 @@
-# Uncomment this line to define a global platform for your project
-platform :ios, '12.0'
+# Podfile
 
-# CocoaPods analytics sends network stats synchronously affecting flutter build latency.
+platform :ios, '13.0'
+
 ENV['COCOAPODS_DISABLE_STATS'] = 'true'
 
 project 'Runner', {
@@ -11,34 +11,41 @@ project 'Runner', {
 }
 
 def flutter_root
-  generated_xcode_build_settings_path = File.expand_path(File.join('..', 'Flutter', 'Generated.xcconfig'), __FILE__)
-  unless File.exist?(generated_xcode_build_settings_path)
-    raise "#{generated_xcode_build_settings_path} must exist. If you're running pod install manually, make sure flutter pub get is executed first"
+  generated_xcconfig = File.expand_path(File.join('..', 'Flutter', 'Generated.xcconfig'), __FILE__)
+  unless File.exist?(generated_xcconfig)
+    raise "#{generated_xcconfig} must exist. If you're running pod install manually, make sure flutter pub get is executed first"
   end
-
-  File.foreach(generated_xcode_build_settings_path) do |line|
+  File.foreach(generated_xcconfig) do |line|
     matches = line.match(/FLUTTER_ROOT\=(.*)/)
     return matches[1].strip if matches
   end
-  raise "FLUTTER_ROOT not found in #{generated_xcode_build_settings_path}. Try deleting Generated.xcconfig, then run flutter pub get"
+  raise "FLUTTER_ROOT not found in #{generated_xcconfig}. Try deleting Flutter/Generated.xcconfig, then run flutter pub get"
 end
 
-require File.expand_path(File.join('packages', 'flutter_tools', 'bin', 'podhelper'), flutter_root)
+# Load Flutter Podhelper
+require File.expand_path(File.join(flutter_root, 'packages', 'flutter_tools', 'bin', 'podhelper'), __FILE__)
 
-flutter_ios_podfile_setup
+flutter_application_path = File.expand_path('..', __dir__)
 
 target 'Runner' do
   use_frameworks!
   use_modular_headers!
 
-  flutter_install_all_ios_pods File.dirname(File.realpath(__FILE__))
-  target 'RunnerTests' do
-    inherit! :search_paths
-  end
+  # Flutter Pods
+  flutter_install_all_ios_pods
+
+  # Google ML Kit Face Detection 종속성 추가
+  pod 'GoogleMLKit/FaceDetection'
+
+  # 추가적인 CocoaPods 종속성을 여기 추가할 수 있습니다.
+  # 예: pod 'SomeOtherPod'
 end
 
 post_install do |installer|
   installer.pods_project.targets.each do |target|
     flutter_additional_ios_build_settings(target)
+    target.build_configurations.each do |config|
+      config.build_settings['ENABLE_BITCODE'] = 'NO'
+    end
   end
 end

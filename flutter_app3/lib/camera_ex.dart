@@ -60,7 +60,7 @@ class _CameraExampleState extends State<CameraExample> {
                   onPressed: () {
                     getImage(ImageSource.camera);
                   },
-                  child: Icon(Icons.add_a_photo),
+                  child: const Icon(Icons.add_a_photo),
                 ),
 
                 // 갤러리에서 이미지를 가져오는 버튼
@@ -69,7 +69,7 @@ class _CameraExampleState extends State<CameraExample> {
                   onPressed: () {
                     getImage(ImageSource.gallery);
                   },
-                  child: Icon(Icons.wallpaper),
+                  child: const Icon(Icons.wallpaper),
                 ),
               ],
             )
