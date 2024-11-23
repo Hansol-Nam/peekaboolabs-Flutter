@@ -1,6 +1,6 @@
 # Podfile
 
-platform :ios, '13.0'
+platform :ios, '16.0'
 
 ENV['COCOAPODS_DISABLE_STATS'] = 'true'
 

@@ -1,0 +1,9 @@
+flutter_app3/ios/Runner/CoremlModelTestFloat16.mlpackage/Data/com.apple.CoreML/weights/weight.bin
+flutter_app3/ios/Runner/coreml_model_test_float16 2.mlpackage/Manifest.json
+flutter_app3/ios/Runner/coreml_model_test_float16 2.mlpackage/Data/com.apple.CoreML/model.mlmodel
+flutter_app3/ios/Runner/coreml_model_test_float16 2.mlpackage/Data/com.apple.CoreML/weights/weight.bin
+# Ignore CoreML weights and models
+*.mlpackage
+*.bin
+flutter_app3/ios/Runner/coreml_model_test_float16 2.mlpackage/Manifest.json
+flutter_app3/ios/Runner/coreml_model_test_float16 2.mlpackage/Data/com.apple.CoreML/model.mlmodel
