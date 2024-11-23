@@ -46,6 +46,8 @@ import Vision
     }
 
     private func predictEmotion(faceBytes: Data, result: @escaping FlutterResult) {
+        print("Received faceBytes of size: \(faceBytes.count)")
+
         guard let model = self.emotionModel else {
             result(FlutterError(code: "MODEL_NOT_LOADED",
                                 message: "Emotion model is not loaded",
@@ -55,14 +57,18 @@ import Vision
 
         // 얼굴 이미지 데이터를 UIImage로 변환
         guard let uiImage = UIImage(data: faceBytes) else {
+        print("Failed to convert faceBytes to UIImage.")
             result(FlutterError(code: "INVALID_IMAGE",
                                 message: "Unable to convert face bytes to UIImage",
                                 details: nil))
             return
         }
+        print("UIImage created successfully. Size: \(uiImage.size)")
 
         // UIImage를 MLMultiArray로 변환
         guard let multiArray = uiImage.toMLMultiArray(width: 224, height: 224) else {
+            print("Failed to convert UIImage to MLMultiArray.")
+
             result(FlutterError(code: "MULTIARRAY_ERROR",
                                 message: "Unable to convert UIImage to MLMultiArray",
                                 details: nil))
@@ -72,6 +78,7 @@ import Vision
         // CoreML 모델 예측
         do {
             let prediction = try model.prediction(x_1: multiArray)
+            print("Prediction successful: \(String(describing: prediction))")
             let scores = prediction.linear_72ShapedArray.scalars // [Float] 배열
 
             // 감정 리스트
@@ -82,11 +89,13 @@ import Vision
                let maxIndex = scores.firstIndex(of: maxScore),
                maxIndex < emotionsList.count {
                 let detectedEmotion = emotionsList[maxIndex]
+                print("Detected emotion: \(detectedEmotion)")
                 result(detectedEmotion)
             } else {
                 result("알 수 없음")
             }
         } catch {
+            print("Error during prediction: \(error.localizedDescription)")
             result(FlutterError(code: "PREDICTION_ERROR",
                                 message: "Error during prediction: \(error.localizedDescription)",
                                 details: nil))

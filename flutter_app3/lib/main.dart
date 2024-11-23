@@ -7,6 +7,9 @@ import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
 import 'package:image/image.dart' as img;
 import 'package:permission_handler/permission_handler.dart';
 import 'dart:ui' as ui;
+import 'package:path_provider/path_provider.dart';
+import 'package:gallery_saver/gallery_saver.dart';
+import 'dart:io';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -52,6 +55,8 @@ class _FaceDetectionPageState extends State<FaceDetectionPage>
     options: FaceDetectorOptions(
       enableContours: true,
       enableClassification: true,
+      minFaceSize: 0.1, // 최소 얼굴 크기 비율
+      performanceMode: FaceDetectorMode.accurate, // 정확도 우선 모드
     ),
   );
   bool _isDetecting = false;
@@ -69,8 +74,9 @@ class _FaceDetectionPageState extends State<FaceDetectionPage>
     _requestPermission();
     _controller = CameraController(
       widget.camera,
-      ResolutionPreset.medium,
+      ResolutionPreset.high,
       enableAudio: false,
+      imageFormatGroup: ImageFormatGroup.yuv420, // YUV420 강제 설정
     );
     _initializeControllerFuture = _controller.initialize().then((_) {
       if (!mounted) return;
@@ -135,6 +141,12 @@ class _FaceDetectionPageState extends State<FaceDetectionPage>
 
       final faces = await _faceDetector.processImage(inputImage);
 
+      if (faces.isEmpty) {
+        print("No faces detected in the frame.");
+        _isDetecting = false;
+        return;
+      }
+
       if (mounted) {
         setState(() {
           _faces = faces;
@@ -181,14 +193,15 @@ class _FaceDetectionPageState extends State<FaceDetectionPage>
   Future<Uint8List?> _extractFaceBytes(
       CameraImage image, Rect boundingBox) async {
     try {
-      // CameraImage를 JPEG으로 변환하기 위해 YUV420을 RGB로 변환
+      print("Starting to process bounding box: $boundingBox");
       final img.Image convertedImage = _convertYUV420ToImage(image);
 
-      // 얼굴 영역 추출
+      // 변환된 이미지 크기
       final int imgWidth = convertedImage.width;
       final int imgHeight = convertedImage.height;
 
-      // boundingBox의 비율을 실제 이미지 크기로 변환
+      print("Converted image size: $imgWidth x $imgHeight");
+      // 좌표 변환
       final double scaleX = imgWidth / image.width;
       final double scaleY = imgHeight / image.height;
 
@@ -196,18 +209,41 @@ class _FaceDetectionPageState extends State<FaceDetectionPage>
           (boundingBox.left * scaleX).clamp(0, imgWidth - 1).toInt();
       final int top =
           (boundingBox.top * scaleY).clamp(0, imgHeight - 1).toInt();
-      final int width =
-          (boundingBox.width * scaleX).clamp(0, imgWidth - left).toInt();
-      final int height =
-          (boundingBox.height * scaleY).clamp(0, imgHeight - top).toInt();
+      final int right =
+          (boundingBox.right * scaleX).clamp(0, imgWidth - 1).toInt();
+      final int bottom =
+          (boundingBox.bottom * scaleY).clamp(0, imgHeight - 1).toInt();
 
-      // 얼굴 영역을 자르기
+      if (left < 0 || top < 0 || right <= left || bottom <= top) {
+        print("Invalid transformed bounding box. Skipping...");
+        return null;
+      }
+
+      // Bounding Box 크기 계산
+      final int width = (right - left).clamp(1, imgWidth).toInt();
+      final int height = (bottom - top).clamp(1, imgHeight).toInt();
+
+      // 디버깅: 좌표 및 크기 출력
+      print(
+          "Transformed Rect: left=$left, top=$top, width=$width, height=$height");
+
+      if (width <= 0 || height <= 0) {
+        print("Invalid bounding box dimensions: width=$width, height=$height");
+        return null;
+      }
+
+      // 얼굴 영역 자르기
       final img.Image faceImage =
           img.copyCrop(convertedImage, left, top, width, height);
 
-      // 얼굴 이미지를 JPEG으로 인코딩
+      // 자른 이미지를 JPEG로 인코딩
       final Uint8List faceBytes =
           Uint8List.fromList(img.encodeJpg(faceImage, quality: 80));
+
+      // 갤러리에 저장
+      await saveImageToGallery(
+          faceBytes, "face_debug_${DateTime.now().millisecondsSinceEpoch}");
+      print("Face bytes extracted successfully.");
 
       return faceBytes;
     } catch (e) {
@@ -216,44 +252,55 @@ class _FaceDetectionPageState extends State<FaceDetectionPage>
     }
   }
 
-// YUV420을 RGB로 변환하는 메서드
+  // YUV420을 RGB로 변환하는 메서드
   img.Image _convertYUV420ToImage(CameraImage image) {
-    final int width = image.width;
-    final int height = image.height;
-    final int uvRowStride = image.planes[1].bytesPerRow;
-    final int uvPixelStride = image.planes[1].bytesPerPixel!;
+    try {
+      final int width = image.width;
+      final int height = image.height;
 
-    final img.Image imgImage = img.Image(width, height); // Create Image buffer
+      print("Converting YUV420 image with size: ${width}x${height}");
+      print("Image planes length: ${image.planes.length}");
 
-    for (int y = 0; y < height; y++) {
-      final int uvRow = y ~/ 2;
-      for (int x = 0; x < width; x++) {
-        final int uvCol = x ~/ 2;
+      if (image.planes.length == 2) {
+        print("Detected NV21/NV12 format.");
+        final img.Image imgImage = img.Image(width, height);
 
-        final int indexY = y * image.planes[0].bytesPerRow + x;
-        final int indexU = uvRow * uvRowStride + uvCol * uvPixelStride;
-        final int indexV = uvRow * uvRowStride + uvCol * uvPixelStride;
+        final Uint8List yPlane = image.planes[0].bytes;
+        final Uint8List uvPlane = image.planes[1].bytes;
 
-        final int yValue = image.planes[0].bytes[indexY];
-        final int uValue = image.planes[1].bytes[indexU];
-        final int vValue = image.planes[2].bytes[indexV];
+        for (int y = 0; y < height; y++) {
+          for (int x = 0; x < width; x++) {
+            final int yIndex = y * image.planes[0].bytesPerRow + x;
+            final int uvIndex =
+                (y ~/ 2) * image.planes[1].bytesPerRow + (x ~/ 2) * 2;
 
-        // YUV to RGB 변환
-        double yDouble = yValue.toDouble();
-        double uDouble = uValue.toDouble() - 128.0;
-        double vDouble = vValue.toDouble() - 128.0;
+            final int yValue = yPlane[yIndex];
+            final int uValue = uvPlane[uvIndex + 0];
+            final int vValue = uvPlane[uvIndex + 1];
 
-        int r = (yDouble + 1.370705 * vDouble).clamp(0, 255).toInt();
-        int g = (yDouble - 0.337633 * uDouble - 0.698001 * vDouble)
-            .clamp(0, 255)
-            .toInt();
-        int b = (yDouble + 1.732446 * uDouble).clamp(0, 255).toInt();
+            final int r =
+                (yValue + 1.402 * (vValue - 128)).clamp(0, 255).toInt();
+            final int g =
+                (yValue - 0.344136 * (uValue - 128) - 0.714136 * (vValue - 128))
+                    .clamp(0, 255)
+                    .toInt();
+            final int b =
+                (yValue + 1.772 * (uValue - 128)).clamp(0, 255).toInt();
 
-        imgImage.setPixelRgba(x, y, r, g, b);
+            imgImage.setPixelRgba(x, y, r, g, b);
+          }
+        }
+
+        print("NV21/NV12 to RGB conversion complete.");
+        return imgImage;
       }
-    }
 
-    return imgImage;
+      throw Exception("Unsupported planes length: ${image.planes.length}");
+    } catch (e, stackTrace) {
+      print("Error in YUV420 to RGB conversion: $e");
+      print("Stack trace: $stackTrace");
+      throw e;
+    }
   }
 
   // 네이티브 코드와 통신하여 감정 예측
@@ -262,6 +309,7 @@ class _FaceDetectionPageState extends State<FaceDetectionPage>
       final String emotion = await platform.invokeMethod('getEmotion', {
         'faceBytes': faceBytes,
       });
+      print('Emotion detected: $emotion');
       return emotion;
     } on PlatformException catch (e) {
       print("Failed to get emotion: '${e.message}'.");
@@ -435,5 +483,25 @@ class FacePainter extends CustomPainter {
         oldDelegate.imageSize != imageSize ||
         oldDelegate.imageRotation != imageRotation ||
         oldDelegate.isFrontCamera != isFrontCamera;
+  }
+}
+
+Future<void> saveImageToGallery(Uint8List imageBytes, String fileName) async {
+  try {
+    // 임시 디렉토리 경로 가져오기
+    final directory = await getTemporaryDirectory();
+    final imagePath = '${directory.path}/$fileName.jpg';
+
+    // 파일로 저장
+    final file = File(imagePath);
+    await file.writeAsBytes(imageBytes);
+
+    print("Image saved to temporary path: $imagePath");
+
+    // 갤러리에 저장
+    await GallerySaver.saveImage(imagePath);
+    print("Image saved to gallery.");
+  } catch (e) {
+    print("Error saving image to gallery: $e");
   }
 }

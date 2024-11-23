@@ -51,5 +51,7 @@
 	<string>your usage description here</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Used to demonstrate image picker plugin</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Debugging face images by saving to the gallery.</string>
 </dict>
 </plist>
