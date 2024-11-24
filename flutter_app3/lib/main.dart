@@ -63,6 +63,10 @@ class _FaceDetectionPageState extends State<FaceDetectionPage>
   List<Face> _faces = [];
   String _emotion = "알 수 없음";
 
+  DateTime? _lastProcessedTime; // 마지막으로 처리된 프레임 시간
+
+  static const Duration frameInterval = Duration(milliseconds: 200); // 5FPS 간격
+
   // MethodChannel 정의
   static const platform =
       MethodChannel('com.peekaboolabs.flutter_app3/emotion');
@@ -103,6 +107,15 @@ class _FaceDetectionPageState extends State<FaceDetectionPage>
 
   // 카메라 프레임 처리
   void _processCameraImage(CameraImage image) async {
+    final now = DateTime.now();
+
+    // 5FPS 간격으로 제한
+    if (_lastProcessedTime != null &&
+        now.difference(_lastProcessedTime!) < frameInterval) {
+      return;
+    }
+    _lastProcessedTime = now;
+
     if (_isDetecting) return;
     _isDetecting = true;
 
